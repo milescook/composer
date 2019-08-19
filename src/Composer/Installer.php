@@ -49,6 +49,7 @@ use Composer\Repository\RepositoryInterface;
 use Composer\Repository\RepositoryManager;
 use Composer\Repository\WritableRepositoryInterface;
 use Composer\Script\ScriptEvents;
+use Composer\Util\Filesystem;
 
 /**
  * @author Jordi Boggiano <j.boggiano@seld.be>
@@ -109,6 +110,7 @@ class Installer
     protected $classMapAuthoritative = false;
     protected $apcuAutoloader = false;
     protected $devMode = false;
+    protected $purgeVendor = false;
     protected $dryRun = false;
     protected $verbose = false;
     protected $update = false;
@@ -195,6 +197,19 @@ class Installer
             $this->installationManager->addInstaller(new NoopInstaller);
             $this->mockLocalRepositories($this->repositoryManager);
         }
+
+        $vendorDir = $this->config->get('vendor-dir');
+            
+        // Issue #8283 and because it's handy when vendor dir 
+        // very occasionally degrades due to crashes, bad installs etc.
+        if($this->purgeVendor && !$this->dryRun && is_dir($vendorDir))
+        {
+            self::delTree($vendorDir);
+            $filesystem = new Filesystem();
+            $filesystem->ensureDirectoryExists($vendorDir);
+        }
+        
+        
 
         if ($this->runScripts) {
             $devMode = (int) $this->devMode;
@@ -310,12 +325,15 @@ class Installer
                 $this->installationManager->ensureBinariesPresence($package);
             }
 
-            $vendorDir = $this->config->get('vendor-dir');
             if (is_dir($vendorDir)) {
                 // suppress errors as this fails sometimes on OSX for no apparent reason
                 // see https://github.com/composer/composer/issues/4070#issuecomment-129792748
+
+                
                 @touch($vendorDir);
             }
+
+            
         }
 
         if ($this->runScripts) {
@@ -1438,6 +1456,19 @@ class Installer
     }
 
     /**
+     * Whether to purge vendor directory or not
+     *
+     * @param  bool      $purgeVendor
+     * @return Installer
+     */
+    public function setPurgeVendor($purgeVendor = true)
+    {
+        $this->purgeVendor = (bool) $purgeVendor;
+
+        return $this;
+    }
+
+    /**
      * @param  RepositoryInterface $additionalInstalledRepository
      * @return $this
      */
@@ -1800,4 +1831,18 @@ class Installer
 
         return $this;
     }
+
+    /**
+     * Recursive directory deletion function from https://www.php.net/manual/en/function.rmdir.php
+     * @return bool
+     */
+    public static function delTree($dir) 
+    { 
+        $files = array_diff(scandir($dir), array('.','..')); 
+        foreach ($files as $file) 
+        { 
+           (is_dir("$dir/$file")) ? self::delTree("$dir/$file") : unlink("$dir/$file"); 
+        } 
+        return rmdir($dir); 
+    } 
 }

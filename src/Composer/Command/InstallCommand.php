@@ -50,6 +50,7 @@ class InstallCommand extends BaseCommand
                 new InputOption('classmap-authoritative', 'a', InputOption::VALUE_NONE, 'Autoload classes from the classmap only. Implicitly enables `--optimize-autoloader`.'),
                 new InputOption('apcu-autoloader', null, InputOption::VALUE_NONE, 'Use APCu to cache found/not-found classes.'),
                 new InputOption('ignore-platform-reqs', null, InputOption::VALUE_NONE, 'Ignore platform requirements (php & ext- packages).'),
+                new InputOption('purge-vendor', null, InputOption::VALUE_NONE, 'Wipes vendor directory and starts a feresh install.'),
                 new InputArgument('packages', InputArgument::IS_ARRAY | InputArgument::OPTIONAL, 'Should not be provided, use composer require instead to add a given package to composer.json.'),
             ))
             ->setHelp(
@@ -101,6 +102,7 @@ EOT
         $apcu = $input->getOption('apcu-autoloader') || $config->get('apcu-autoloader');
 
         $install
+            ->setPurgeVendor($input->getOption('purge-vendor'))
             ->setDryRun($input->getOption('dry-run'))
             ->setVerbose($input->getOption('verbose'))
             ->setPreferSource($preferSource)
