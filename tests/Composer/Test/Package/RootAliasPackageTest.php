@@ -14,12 +14,11 @@ namespace Composer\Test\Package;
 
 use Composer\Package\Link;
 use Composer\Package\RootAliasPackage;
-use Composer\TestCase;
+use Composer\Test\TestCase;
 use Prophecy\Argument;
 
 class RootAliasPackageTest extends TestCase
 {
-
     public function testUpdateRequires()
     {
         $root = $this->getMockRootPackageInterface();
@@ -89,6 +88,7 @@ class RootAliasPackageTest extends TestCase
         $root->getConflicts()->willReturn(array())->shouldBeCalled();
         $root->getProvides()->willReturn(array())->shouldBeCalled();
         $root->getReplaces()->willReturn(array())->shouldBeCalled();
+
         return $root;
     }
 }

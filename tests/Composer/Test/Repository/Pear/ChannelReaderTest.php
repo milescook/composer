@@ -10,9 +10,14 @@
  * file that was distributed with this source code.
  */
 
-namespace Composer\Repository\Pear;
+namespace Composer\Test\Repository\Pear;
 
-use Composer\TestCase;
+use Composer\Repository\Pear\ChannelInfo;
+use Composer\Repository\Pear\DependencyConstraint;
+use Composer\Repository\Pear\DependencyInfo;
+use Composer\Repository\Pear\PackageInfo;
+use Composer\Repository\Pear\ReleaseInfo;
+use Composer\Test\TestCase;
 use Composer\Semver\VersionParser;
 use Composer\Semver\Constraint\Constraint;
 use Composer\Package\Link;
@@ -40,7 +45,7 @@ class ChannelReaderTest extends TestCase
         $this->assertEquals('MDB2', $packages[2]->getPackageName());
 
         $mdb2releases = $packages[2]->getReleases();
-        $this->assertEquals(9, count($mdb2releases['2.4.0']->getDependencyInfo()->getOptionals()));
+        $this->assertCount(9, $mdb2releases['2.4.0']->getDependencyInfo()->getOptionals());
     }
 
     public function testShouldSelectCorrectReader()

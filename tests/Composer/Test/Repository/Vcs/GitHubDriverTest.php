@@ -14,19 +14,22 @@ namespace Composer\Test\Repository\Vcs;
 
 use Composer\Downloader\TransportException;
 use Composer\Repository\Vcs\GitHubDriver;
+use Composer\Test\TestCase;
 use Composer\Util\Filesystem;
 use Composer\Config;
 
-class GitHubDriverTest extends \PHPUnit_Framework_TestCase
+class GitHubDriverTest extends TestCase
 {
+    private $home;
     private $config;
 
     public function setUp()
     {
+        $this->home = $this->getUniqueTmpDirectory();
         $this->config = new Config();
         $this->config->merge(array(
             'config' => array(
-                'home' => sys_get_temp_dir() . '/composer-test',
+                'home' => $this->home,
             ),
         ));
     }
@@ -34,7 +37,7 @@ class GitHubDriverTest extends \PHPUnit_Framework_TestCase
     public function tearDown()
     {
         $fs = new Filesystem;
-        $fs->removeDirectory(sys_get_temp_dir() . '/composer-test');
+        $fs->removeDirectory($this->home);
     }
 
     public function testPrivateRepository()
@@ -45,7 +48,7 @@ class GitHubDriverTest extends \PHPUnit_Framework_TestCase
         $identifier = 'v0.0.0';
         $sha = 'SOMESHA';
 
-        $io = $this->getMock('Composer\IO\IOInterface');
+        $io = $this->getMockBuilder('Composer\IO\IOInterface')->getMock();
         $io->expects($this->any())
             ->method('isInteractive')
             ->will($this->returnValue(true));
@@ -54,7 +57,7 @@ class GitHubDriverTest extends \PHPUnit_Framework_TestCase
             ->setConstructorArgs(array($io))
             ->getMock();
 
-        $process = $this->getMock('Composer\Util\ProcessExecutor');
+        $process = $this->getMockBuilder('Composer\Util\ProcessExecutor')->getMock();
         $process->expects($this->any())
             ->method('execute')
             ->will($this->returnValue(1));
@@ -75,7 +78,7 @@ class GitHubDriverTest extends \PHPUnit_Framework_TestCase
 
         $remoteFilesystem->expects($this->at(1))
             ->method('getContents')
-            ->with($this->equalTo('github.com'), $this->equalTo('https://api.github.com/rate_limit'), $this->equalTo(false))
+            ->with($this->equalTo('github.com'), $this->equalTo('https://api.github.com/'), $this->equalTo(false))
             ->will($this->returnValue('{}'));
 
         $remoteFilesystem->expects($this->at(2))
@@ -83,8 +86,8 @@ class GitHubDriverTest extends \PHPUnit_Framework_TestCase
             ->with($this->equalTo('github.com'), $this->equalTo($repoApiUrl), $this->equalTo(false))
             ->will($this->returnValue('{"master_branch": "test_master", "private": true, "owner": {"login": "composer"}, "name": "packagist"}'));
 
-        $configSource = $this->getMock('Composer\Config\ConfigSourceInterface');
-        $authConfigSource = $this->getMock('Composer\Config\ConfigSourceInterface');
+        $configSource = $this->getMockBuilder('Composer\Config\ConfigSourceInterface')->getMock();
+        $authConfigSource = $this->getMockBuilder('Composer\Config\ConfigSourceInterface')->getMock();
         $this->config->setConfigSource($configSource);
         $this->config->setAuthConfigSource($authConfigSource);
 
@@ -116,7 +119,7 @@ class GitHubDriverTest extends \PHPUnit_Framework_TestCase
         $identifier = 'v0.0.0';
         $sha = 'SOMESHA';
 
-        $io = $this->getMock('Composer\IO\IOInterface');
+        $io = $this->getMockBuilder('Composer\IO\IOInterface')->getMock();
         $io->expects($this->any())
             ->method('isInteractive')
             ->will($this->returnValue(true));
@@ -159,7 +162,7 @@ class GitHubDriverTest extends \PHPUnit_Framework_TestCase
         $identifier = 'feature/3.2-foo';
         $sha = 'SOMESHA';
 
-        $io = $this->getMock('Composer\IO\IOInterface');
+        $io = $this->getMockBuilder('Composer\IO\IOInterface')->getMock();
         $io->expects($this->any())
             ->method('isInteractive')
             ->will($this->returnValue(true));
@@ -219,7 +222,7 @@ class GitHubDriverTest extends \PHPUnit_Framework_TestCase
             ->disableOriginalConstructor()
             ->getMock();
 
-        $io = $this->getMock('Composer\IO\IOInterface');
+        $io = $this->getMockBuilder('Composer\IO\IOInterface')->getMock();
         $io->expects($this->any())
             ->method('isInteractive')
             ->will($this->returnValue(false));

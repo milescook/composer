@@ -14,20 +14,18 @@ namespace Composer\Test\Util;
 
 use Composer\Downloader\TransportException;
 use Composer\Util\GitHub;
+use PHPUnit\Framework\TestCase;
 use RecursiveArrayIterator;
 use RecursiveIteratorIterator;
 
 /**
  * @author Rob Bast <rob.bast@gmail.com>
  */
-class GitHubTest extends \PHPUnit_Framework_TestCase
+class GitHubTest extends TestCase
 {
-    private $username = 'username';
     private $password = 'password';
-    private $authcode = 'authcode';
     private $message = 'mymessage';
     private $origin = 'github.com';
-    private $token = 'githubtoken';
 
     public function testUsernamePasswordAuthenticationFlow()
     {
@@ -50,11 +48,11 @@ class GitHubTest extends \PHPUnit_Framework_TestCase
             ->method('getContents')
             ->with(
                 $this->equalTo($this->origin),
-                $this->equalTo(sprintf('https://api.%s/rate_limit', $this->origin)),
+                $this->equalTo(sprintf('https://api.%s/', $this->origin)),
                 $this->isFalse(),
                 $this->anything()
             )
-            ->willReturn(sprintf('{}', $this->token))
+            ->willReturn('{}')
         ;
 
         $config = $this->getConfigMock();
@@ -116,9 +114,7 @@ class GitHubTest extends \PHPUnit_Framework_TestCase
 
     private function getConfigMock()
     {
-        $config = $this->getMock('Composer\Config');
-
-        return $config;
+        return $this->getMockBuilder('Composer\Config')->getMock();
     }
 
     private function getRemoteFilesystemMock()

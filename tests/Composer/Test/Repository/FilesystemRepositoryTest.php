@@ -10,9 +10,10 @@
  * file that was distributed with this source code.
  */
 
-namespace Composer\Repository;
+namespace Composer\Test\Repository;
 
-use Composer\TestCase;
+use Composer\Repository\FilesystemRepository;
+use Composer\Test\TestCase;
 
 class FilesystemRepositoryTest extends TestCase
 {
@@ -35,14 +36,14 @@ class FilesystemRepositoryTest extends TestCase
 
         $packages = $repository->getPackages();
 
-        $this->assertSame(1, count($packages));
+        $this->assertCount(1, $packages);
         $this->assertSame('package1', $packages[0]->getName());
         $this->assertSame('1.0.0.0-beta', $packages[0]->getVersion());
         $this->assertSame('vendor', $packages[0]->getType());
     }
 
     /**
-     * @expectedException Composer\Repository\InvalidRepositoryException
+     * @expectedException \Composer\Repository\InvalidRepositoryException
      */
     public function testCorruptedRepositoryFile()
     {

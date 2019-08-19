@@ -12,14 +12,15 @@
 
 namespace Composer\Test;
 
-use Symfony\Component\Process\Process;
+use Composer\Test\TestCase;
 use Composer\Util\Filesystem;
 use Symfony\Component\Finder\Finder;
+use Symfony\Component\Process\Process;
 
 /**
  * @group slow
  */
-class AllFunctionalTest extends \PHPUnit_Framework_TestCase
+class AllFunctionalTest extends TestCase
 {
     protected $oldcwd;
     protected $oldenv;
@@ -29,17 +30,21 @@ class AllFunctionalTest extends \PHPUnit_Framework_TestCase
     public function setUp()
     {
         $this->oldcwd = getcwd();
+
         chdir(__DIR__.'/Fixtures/functional');
     }
 
     public function tearDown()
     {
         chdir($this->oldcwd);
+
         $fs = new Filesystem;
+
         if ($this->testDir) {
             $fs->removeDirectory($this->testDir);
             $this->testDir = null;
         }
+
         if ($this->oldenv) {
             $fs->removeDirectory(getenv('COMPOSER_HOME'));
             $_SERVER['COMPOSER_HOME'] = $this->oldenv;
@@ -50,7 +55,7 @@ class AllFunctionalTest extends \PHPUnit_Framework_TestCase
 
     public static function setUpBeforeClass()
     {
-        self::$pharPath = sys_get_temp_dir().'/composer-phar-test/composer.phar';
+        self::$pharPath = self::getUniqueTmpDirectory() . '/composer.phar';
     }
 
     public static function tearDownAfterClass()
@@ -66,9 +71,7 @@ class AllFunctionalTest extends \PHPUnit_Framework_TestCase
         }
 
         $target = dirname(self::$pharPath);
-        $fs = new Filesystem;
-        $fs->removeDirectory($target);
-        $fs->ensureDirectoryExists($target);
+        $fs = new Filesystem();
         chdir($target);
 
         $it = new \RecursiveDirectoryIterator(__DIR__.'/../../../', \RecursiveDirectoryIterator::SKIP_DOTS);
@@ -85,10 +88,12 @@ class AllFunctionalTest extends \PHPUnit_Framework_TestCase
 
         $proc = new Process('php '.escapeshellarg('./bin/compile'), $target);
         $exitcode = $proc->run();
+
         if ($exitcode !== 0 || trim($proc->getOutput())) {
             $this->fail($proc->getOutput());
         }
-        $this->assertTrue(file_exists(self::$pharPath));
+
+        $this->assertFileExists(self::$pharPath);
     }
 
     /**
@@ -140,7 +145,7 @@ class AllFunctionalTest extends \PHPUnit_Framework_TestCase
         $data = array();
         $section = null;
 
-        $testDir = sys_get_temp_dir().'/composer_functional_test'.uniqid(mt_rand(), true);
+        $testDir = self::getUniqueTmpDirectory();
         $this->testDir = $testDir;
         $varRegex = '#%([a-zA-Z_-]+)%#';
         $variableReplacer = function ($match) use (&$data, $testDir) {
@@ -157,18 +162,18 @@ class AllFunctionalTest extends \PHPUnit_Framework_TestCase
             }
         };
 
-        for ($i = 0, $c = count($tokens); $i < $c; $i++) {
-            if ('' === $tokens[$i] && null === $section) {
+        foreach ($tokens as $token) {
+            if ('' === $token && null === $section) {
                 continue;
             }
 
             // Handle section headers.
             if (null === $section) {
-                $section = $tokens[$i];
+                $section = $token;
                 continue;
             }
 
-            $sectionData = $tokens[$i];
+            $sectionData = $token;
 
             // Allow sections to validate, or modify their section data.
             switch ($section) {
@@ -177,7 +182,8 @@ class AllFunctionalTest extends \PHPUnit_Framework_TestCase
                     break;
 
                 case 'EXPECT-EXIT-CODE':
-                    $sectionData = (integer) $sectionData;
+                    $sectionData = (int) $sectionData;
+                    break;
 
                 case 'EXPECT':
                 case 'EXPECT-REGEX':

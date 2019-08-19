@@ -14,9 +14,11 @@ namespace Composer\Test\Util;
 
 use Composer\Config;
 use Composer\IO\NullIO;
+use Composer\Util\Platform;
 use Composer\Util\Svn;
+use PHPUnit\Framework\TestCase;
 
-class SvnTest extends \PHPUnit_Framework_TestCase
+class SvnTest extends TestCase
 {
     /**
      * Test the credential string.
@@ -131,10 +133,6 @@ class SvnTest extends \PHPUnit_Framework_TestCase
 
     private function getCmd($cmd)
     {
-        if (defined('PHP_WINDOWS_VERSION_BUILD')) {
-            return strtr($cmd, "'", '"');
-        }
-
-        return $cmd;
+        return Platform::isWindows() ? strtr($cmd, "'", '"') : $cmd;
     }
 }

@@ -10,7 +10,7 @@
  * file that was distributed with this source code.
  */
 
-namespace Composer\Test\Installer;
+namespace Composer\Test\Plugin;
 
 use Composer\Composer;
 use Composer\Config;
@@ -20,7 +20,7 @@ use Composer\Package\Loader\JsonLoader;
 use Composer\Package\Loader\ArrayLoader;
 use Composer\Plugin\PluginManager;
 use Composer\Autoload\AutoloadGenerator;
-use Composer\TestCase;
+use Composer\Test\TestCase;
 use Composer\Util\Filesystem;
 
 class PluginInstallerTest extends TestCase
@@ -69,8 +69,8 @@ class PluginInstallerTest extends TestCase
     {
         $loader = new JsonLoader(new ArrayLoader());
         $this->packages = array();
-        $this->directory = sys_get_temp_dir() . '/' . uniqid();
-        for ($i = 1; $i <= 7; $i++) {
+        $this->directory = $this->getUniqueTmpDirectory();
+        for ($i = 1; $i <= 8; $i++) {
             $filename = '/Fixtures/plugin-v'.$i.'/composer.json';
             mkdir(dirname($this->directory . $filename), 0777, true);
             $this->packages[] = $loader->load(__DIR__ . $filename);
@@ -80,7 +80,7 @@ class PluginInstallerTest extends TestCase
             ->disableOriginalConstructor()
             ->getMock();
 
-        $this->repository = $this->getMock('Composer\Repository\InstalledRepositoryInterface');
+        $this->repository = $this->getMockBuilder('Composer\Repository\InstalledRepositoryInterface')->getMock();
 
         $rm = $this->getMockBuilder('Composer\Repository\RepositoryManager')
             ->disableOriginalConstructor()
@@ -89,14 +89,14 @@ class PluginInstallerTest extends TestCase
             ->method('getLocalRepository')
             ->will($this->returnValue($this->repository));
 
-        $im = $this->getMock('Composer\Installer\InstallationManager');
+        $im = $this->getMockBuilder('Composer\Installer\InstallationManager')->getMock();
         $im->expects($this->any())
             ->method('getInstallPath')
             ->will($this->returnCallback(function ($package) {
                 return __DIR__.'/Fixtures/'.$package->getPrettyName();
             }));
 
-        $this->io = $this->getMock('Composer\IO\IOInterface');
+        $this->io = $this->getMockBuilder('Composer\IO\IOInterface')->getMock();
 
         $dispatcher = $this->getMockBuilder('Composer\EventDispatcher\EventDispatcher')->disableOriginalConstructor()->getMock();
         $this->autoloadGenerator = new AutoloadGenerator($dispatcher);
@@ -147,7 +147,7 @@ class PluginInstallerTest extends TestCase
         $this->repository
             ->expects($this->exactly(2))
             ->method('getPackages')
-            ->will($this->returnValue(array()));
+            ->will($this->returnValue(array($this->packages[3])));
         $installer = new PluginInstaller($this->io, $this->composer);
         $this->pm->loadInstalledPlugins();
 
@@ -243,28 +243,10 @@ class PluginInstallerTest extends TestCase
              ->expects($this->any())
              ->method('getPackages')
              ->will($this->returnCallback(function () use ($plugApiInternalPackage, $plugins) {
-                return array_merge(array($plugApiInternalPackage), $plugins);
+                 return array_merge(array($plugApiInternalPackage), $plugins);
              }));
 
         $this->pm->loadInstalledPlugins();
-    }
-
-    public function testExactPluginVersionStyleAreRegisteredCorrectly()
-    {
-        $pluginsWithFixedAPIVersions = array(
-            $this->packages[0],
-            $this->packages[1],
-            $this->packages[2],
-        );
-
-        $this->setPluginApiVersionWithPlugins('1.0.0', $pluginsWithFixedAPIVersions);
-        $this->assertCount(3, $this->pm->getPlugins());
-
-        $this->setPluginApiVersionWithPlugins('1.0.1', $pluginsWithFixedAPIVersions);
-        $this->assertCount(0, $this->pm->getPlugins());
-
-        $this->setPluginApiVersionWithPlugins('2.0.0-dev', $pluginsWithFixedAPIVersions);
-        $this->assertCount(0, $this->pm->getPlugins());
     }
 
     public function testStarPluginVersionWorksWithAnyAPIVersion()
@@ -313,5 +295,119 @@ class PluginInstallerTest extends TestCase
 
         $this->setPluginApiVersionWithPlugins('5.5.0', $pluginWithApiConstraint);
         $this->assertCount(0, $this->pm->getPlugins());
+    }
+
+    public function testCommandProviderCapability()
+    {
+        $this->repository
+            ->expects($this->exactly(2))
+            ->method('getPackages')
+            ->will($this->returnValue(array($this->packages[7])));
+        $installer = new PluginInstaller($this->io, $this->composer);
+        $this->pm->loadInstalledPlugins();
+
+        $caps = $this->pm->getPluginCapabilities('Composer\Plugin\Capability\CommandProvider', array('composer' => $this->composer, 'io' => $this->io));
+        $this->assertCount(1, $caps);
+        $this->assertInstanceOf('Composer\Plugin\Capability\CommandProvider', $caps[0]);
+
+        $commands = $caps[0]->getCommands();
+        $this->assertCount(1, $commands);
+        $this->assertInstanceOf('Composer\Command\BaseCommand', $commands[0]);
+    }
+
+    public function testIncapablePluginIsCorrectlyDetected()
+    {
+        $plugin = $this->getMockBuilder('Composer\Plugin\PluginInterface')
+                       ->getMock();
+
+        $this->assertNull($this->pm->getPluginCapability($plugin, 'Fake\Ability'));
+    }
+
+    public function testCapabilityImplementsComposerPluginApiClassAndIsConstructedWithArgs()
+    {
+        $capabilityApi = 'Composer\Plugin\Capability\Capability';
+        $capabilityImplementation = 'Composer\Test\Plugin\Mock\Capability';
+
+        $plugin = $this->getMockBuilder('Composer\Test\Plugin\Mock\CapablePluginInterface')
+                       ->getMock();
+
+        $plugin->expects($this->once())
+               ->method('getCapabilities')
+               ->will($this->returnCallback(function () use ($capabilityImplementation, $capabilityApi) {
+                   return array($capabilityApi => $capabilityImplementation);
+               }));
+
+        $capability = $this->pm->getPluginCapability($plugin, $capabilityApi, array('a' => 1, 'b' => 2));
+
+        $this->assertInstanceOf($capabilityApi, $capability);
+        $this->assertInstanceOf($capabilityImplementation, $capability);
+        $this->assertSame(array('a' => 1, 'b' => 2, 'plugin' => $plugin), $capability->args);
+    }
+
+    public function invalidImplementationClassNames()
+    {
+        return array(
+            array(null),
+            array(""),
+            array(0),
+            array(1000),
+            array("   "),
+            array(array(1)),
+            array(array()),
+            array(new \stdClass()),
+        );
+    }
+
+    public function nonExistingOrInvalidImplementationClassTypes()
+    {
+        return array(
+            array('\stdClass'),
+            array('NonExistentClassLikeMiddleClass'),
+        );
+    }
+
+    /**
+     * @dataProvider invalidImplementationClassNames
+     * @expectedException \UnexpectedValueException
+     */
+    public function testQueryingWithInvalidCapabilityClassNameThrows($invalidImplementationClassNames)
+    {
+        $capabilityApi = 'Composer\Plugin\Capability\Capability';
+
+        $plugin = $this->getMockBuilder('Composer\Test\Plugin\Mock\CapablePluginInterface')
+                       ->getMock();
+
+        $plugin->expects($this->once())
+               ->method('getCapabilities')
+               ->will($this->returnCallback(function () use ($invalidImplementationClassNames, $capabilityApi) {
+                   return array($capabilityApi => $invalidImplementationClassNames);
+               }));
+
+        $this->pm->getPluginCapability($plugin, $capabilityApi);
+    }
+
+    public function testQueryingNonProvidedCapabilityReturnsNullSafely()
+    {
+        $capabilityApi = 'Composer\Plugin\Capability\MadeUpCapability';
+
+        $plugin = $this->getMockBuilder('Composer\Test\Plugin\Mock\CapablePluginInterface')
+                       ->getMock();
+
+        $plugin->expects($this->once())
+               ->method('getCapabilities')
+               ->will($this->returnCallback(function () {
+                   return array();
+               }));
+
+        $this->assertNull($this->pm->getPluginCapability($plugin, $capabilityApi));
+    }
+
+    /**
+     * @dataProvider nonExistingOrInvalidImplementationClassTypes
+     * @expectedException \RuntimeException
+     */
+    public function testQueryingWithNonExistingOrWrongCapabilityClassTypesThrows($wrongImplementationClassTypes)
+    {
+        $this->testQueryingWithInvalidCapabilityClassNameThrows($wrongImplementationClassTypes);
     }
 }

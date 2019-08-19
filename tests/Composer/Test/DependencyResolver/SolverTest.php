@@ -12,6 +12,7 @@
 
 namespace Composer\Test\DependencyResolver;
 
+use Composer\IO\NullIO;
 use Composer\Repository\ArrayRepository;
 use Composer\DependencyResolver\DefaultPolicy;
 use Composer\DependencyResolver\Pool;
@@ -19,7 +20,7 @@ use Composer\DependencyResolver\Request;
 use Composer\DependencyResolver\Solver;
 use Composer\DependencyResolver\SolverProblemsException;
 use Composer\Package\Link;
-use Composer\TestCase;
+use Composer\Test\TestCase;
 use Composer\Semver\Constraint\MultiConstraint;
 
 class SolverTest extends TestCase
@@ -29,6 +30,7 @@ class SolverTest extends TestCase
     protected $repoInstalled;
     protected $request;
     protected $policy;
+    protected $solver;
 
     public function setUp()
     {
@@ -36,9 +38,9 @@ class SolverTest extends TestCase
         $this->repo = new ArrayRepository;
         $this->repoInstalled = new ArrayRepository;
 
-        $this->request = new Request($this->pool);
+        $this->request = new Request();
         $this->policy = new DefaultPolicy;
-        $this->solver = new Solver($this->policy, $this->pool, $this->repoInstalled);
+        $this->solver = new Solver($this->policy, $this->pool, $this->repoInstalled, new NullIO());
     }
 
     public function testSolverInstallSingle()
@@ -75,7 +77,7 @@ class SolverTest extends TestCase
             $this->fail('Unsolvable conflict did not result in exception.');
         } catch (SolverProblemsException $e) {
             $problems = $e->getProblems();
-            $this->assertEquals(1, count($problems));
+            $this->assertCount(1, $problems);
             $this->assertEquals(2, $e->getCode());
             $this->assertEquals("\n    - The requested package b could not be found in any version, there may be a typo in the package name.", $problems[0]->getPrettyString());
         }
@@ -670,7 +672,7 @@ class SolverTest extends TestCase
             $this->fail('Unsolvable conflict did not result in exception.');
         } catch (SolverProblemsException $e) {
             $problems = $e->getProblems();
-            $this->assertEquals(1, count($problems));
+            $this->assertCount(1, $problems);
 
             $msg = "\n";
             $msg .= "  Problem 1\n";
@@ -699,7 +701,7 @@ class SolverTest extends TestCase
             $this->fail('Unsolvable conflict did not result in exception.');
         } catch (SolverProblemsException $e) {
             $problems = $e->getProblems();
-            $this->assertEquals(1, count($problems));
+            $this->assertCount(1, $problems);
             // TODO assert problem properties
 
             $msg = "\n";
@@ -709,7 +711,8 @@ class SolverTest extends TestCase
             $msg .= "Potential causes:\n";
             $msg .= " - A typo in the package name\n";
             $msg .= " - The package is not available in a stable-enough version according to your minimum-stability setting\n";
-            $msg .= "   see <https://groups.google.com/d/topic/composer-dev/_g3ASeIFlrc/discussion> for more details.\n\n";
+            $msg .= "   see <https://getcomposer.org/doc/04-schema.md#minimum-stability> for more details.\n";
+            $msg .= " - It's a private package and you forgot to add a custom repository to find it\n\n";
             $msg .= "Read <https://getcomposer.org/doc/articles/troubleshooting.md> for further common problems.";
             $this->assertEquals($msg, $e->getMessage());
         }
@@ -745,7 +748,7 @@ class SolverTest extends TestCase
             $this->fail('Unsolvable conflict did not result in exception.');
         } catch (SolverProblemsException $e) {
             $problems = $e->getProblems();
-            $this->assertEquals(1, count($problems));
+            $this->assertCount(1, $problems);
 
             $msg = "\n";
             $msg .= "  Problem 1\n";
@@ -835,6 +838,77 @@ class SolverTest extends TestCase
         ));
     }
 
+    /**
+     * Tests for a bug introduced in commit 451bab1c2cd58e05af6e21639b829408ad023463 Solver.php line 554/523
+     *
+     * Every package and link in this test matters, only a combination this complex will run into the situation in which
+     * a negatively decided literal will need to be learned inverted as a positive assertion.
+     *
+     * In particular in this case the goal is to first have the solver decide X 2.0 should not be installed to later
+     * decide to learn that X 2.0 must be installed and revert decisions to retry solving with this new assumption.
+     */
+    public function testLearnPositiveLiteral()
+    {
+        $this->repo->addPackage($packageA = $this->getPackage('A', '1.0'));
+        $this->repo->addPackage($packageB = $this->getPackage('B', '1.0'));
+        $this->repo->addPackage($packageC1 = $this->getPackage('C', '1.0'));
+        $this->repo->addPackage($packageC2 = $this->getPackage('C', '2.0'));
+        $this->repo->addPackage($packageD = $this->getPackage('D', '1.0'));
+        $this->repo->addPackage($packageE = $this->getPackage('E', '1.0'));
+        $this->repo->addPackage($packageF1 = $this->getPackage('F', '1.0'));
+        $this->repo->addPackage($packageF2 = $this->getPackage('F', '2.0'));
+        $this->repo->addPackage($packageG1 = $this->getPackage('G', '1.0'));
+        $this->repo->addPackage($packageG2 = $this->getPackage('G', '2.0'));
+        $this->repo->addPackage($packageG3 = $this->getPackage('G', '3.0'));
+
+        $packageA->setRequires(array(
+            'b' => new Link('A', 'B', $this->getVersionConstraint('==', '1.0'), 'requires'),
+            'c' => new Link('A', 'C', $this->getVersionConstraint('>=', '1.0'), 'requires'),
+            'd' => new Link('A', 'D', $this->getVersionConstraint('==', '1.0'), 'requires'),
+        ));
+
+        $packageB->setRequires(array(
+            'e' => new Link('B', 'E', $this->getVersionConstraint('==', '1.0'), 'requires'),
+        ));
+
+        $packageC1->setRequires(array(
+            'f' => new Link('C', 'F', $this->getVersionConstraint('==', '1.0'), 'requires'),
+        ));
+        $packageC2->setRequires(array(
+            'f' => new Link('C', 'F', $this->getVersionConstraint('==', '1.0'), 'requires'),
+            'g' => new Link('C', 'G', $this->getVersionConstraint('>=', '1.0'), 'requires'),
+        ));
+
+        $packageD->setRequires(array(
+            'f' => new Link('D', 'F', $this->getVersionConstraint('>=', '1.0'), 'requires'),
+        ));
+
+        $packageE->setRequires(array(
+            'g' => new Link('E', 'G', $this->getVersionConstraint('<=', '2.0'), 'requires'),
+        ));
+
+        $this->reposComplete();
+
+        $this->request->install('A');
+
+        // check correct setup for assertion later
+        $this->assertFalse($this->solver->testFlagLearnedPositiveLiteral);
+
+        $this->checkSolverResult(array(
+            array('job' => 'install', 'package' => $packageF1),
+            array('job' => 'install', 'package' => $packageD),
+            array('job' => 'install', 'package' => $packageG2),
+            array('job' => 'install', 'package' => $packageC2),
+            array('job' => 'install', 'package' => $packageE),
+            array('job' => 'install', 'package' => $packageB),
+            array('job' => 'install', 'package' => $packageA),
+        ));
+
+        // verify that the code path leading to a negative literal resulting in a positive learned literal is actually
+        // executed
+        $this->assertTrue($this->solver->testFlagLearnedPositiveLiteral);
+    }
+
     protected function reposComplete()
     {
         $this->pool->addRepository($this->repoInstalled);
@@ -849,14 +923,14 @@ class SolverTest extends TestCase
         foreach ($transaction as $operation) {
             if ('update' === $operation->getJobType()) {
                 $result[] = array(
-                    'job'  => 'update',
+                    'job' => 'update',
                     'from' => $operation->getInitialPackage(),
-                    'to'   => $operation->getTargetPackage(),
+                    'to' => $operation->getTargetPackage(),
                 );
             } else {
                 $job = ('uninstall' === $operation->getJobType() ? 'remove' : 'install');
                 $result[] = array(
-                    'job'     => $job,
+                    'job' => $job,
                     'package' => $operation->getPackage(),
                 );
             }

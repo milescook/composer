@@ -13,11 +13,11 @@
 namespace Composer\Test\Package\Archiver;
 
 use Composer\Package\Archiver\ArchivableFilesFinder;
+use Composer\Test\TestCase;
 use Composer\Util\Filesystem;
 use Symfony\Component\Process\Process;
-use Symfony\Component\Process\ExecutableFinder;
 
-class ArchivableFilesFinderTest extends \PHPUnit_Framework_TestCase
+class ArchivableFilesFinderTest extends TestCase
 {
     protected $sources;
     protected $finder;
@@ -29,7 +29,7 @@ class ArchivableFilesFinderTest extends \PHPUnit_Framework_TestCase
         $this->fs = $fs;
 
         $this->sources = $fs->normalizePath(
-            realpath(sys_get_temp_dir()).'/composer_archiver_test'.uniqid(mt_rand(), true)
+            $this->getUniqueTmpDirectory()
         );
 
         $fileTree = array(
@@ -145,10 +145,7 @@ class ArchivableFilesFinderTest extends \PHPUnit_Framework_TestCase
 
     public function testGitExcludes()
     {
-        // Ensure that git is available for testing.
-        if (!$this->isProcessAvailable('git')) {
-            return $this->markTestSkipped('git is not available.');
-        }
+        $this->skipIfNotExecutable('git');
 
         file_put_contents($this->sources.'/.gitignore', implode("\n", array(
             '# gitignore rules with comments and blank lines',
@@ -188,7 +185,8 @@ class ArchivableFilesFinderTest extends \PHPUnit_Framework_TestCase
 
         $this->finder = new ArchivableFilesFinder($this->sources, array());
 
-        $this->assertArchivableFiles($this->getArchivedFiles('git init && '.
+        $this->assertArchivableFiles($this->getArchivedFiles(
+            'git init && '.
             'git config user.email "you@example.com" && '.
             'git config user.name "Your Name" && '.
             'git add .git* && '.
@@ -201,10 +199,7 @@ class ArchivableFilesFinderTest extends \PHPUnit_Framework_TestCase
 
     public function testHgExcludes()
     {
-        // Ensure that Mercurial is available for testing.
-        if (!$this->isProcessAvailable('hg')) {
-            return $this->markTestSkipped('Mercurial is not available.');
-        }
+        $this->skipIfNotExecutable('hg');
 
         file_put_contents($this->sources.'/.hgignore', implode("\n", array(
             '# hgignore rules with comments, blank lines and syntax changes',
@@ -228,7 +223,8 @@ class ArchivableFilesFinderTest extends \PHPUnit_Framework_TestCase
 
         $this->finder = new ArchivableFilesFinder($this->sources, array());
 
-        $expectedFiles = $this->getArchivedFiles('hg init && '.
+        $expectedFiles = $this->getArchivedFiles(
+            'hg init && '.
             'hg add && '.
             'hg commit -m "init" && '.
             'hg archive archive.zip'
@@ -239,6 +235,61 @@ class ArchivableFilesFinderTest extends \PHPUnit_Framework_TestCase
         array_splice($expectedFiles, $archiveKey, 1);
 
         $this->assertArchivableFiles($expectedFiles);
+    }
+
+    public function testSkipExcludes()
+    {
+        $excludes = array(
+            'prefixB.foo',
+        );
+
+        $this->finder = new ArchivableFilesFinder($this->sources, $excludes, true);
+
+        $this->assertArchivableFiles(array(
+            '/!important!.txt',
+            '/!important_too!.txt',
+            '/#weirdfile',
+            '/A/prefixA.foo',
+            '/A/prefixB.foo',
+            '/A/prefixC.foo',
+            '/A/prefixD.foo',
+            '/A/prefixE.foo',
+            '/A/prefixF.foo',
+            '/B/sub/prefixA.foo',
+            '/B/sub/prefixB.foo',
+            '/B/sub/prefixC.foo',
+            '/B/sub/prefixD.foo',
+            '/B/sub/prefixE.foo',
+            '/B/sub/prefixF.foo',
+            '/C/prefixA.foo',
+            '/C/prefixB.foo',
+            '/C/prefixC.foo',
+            '/C/prefixD.foo',
+            '/C/prefixE.foo',
+            '/C/prefixF.foo',
+            '/D/prefixA',
+            '/D/prefixB',
+            '/D/prefixC',
+            '/D/prefixD',
+            '/D/prefixE',
+            '/D/prefixF',
+            '/E/subtestA.foo',
+            '/F/subtestA.foo',
+            '/G/subtestA.foo',
+            '/H/subtestA.foo',
+            '/I/J/subtestA.foo',
+            '/K/dirJ/subtestA.foo',
+            '/parameters.yml',
+            '/parameters.yml.dist',
+            '/prefixA.foo',
+            '/prefixB.foo',
+            '/prefixC.foo',
+            '/prefixD.foo',
+            '/prefixE.foo',
+            '/prefixF.foo',
+            '/toplevelA.foo',
+            '/toplevelB.foo',
+        ));
     }
 
     protected function getArchivableFiles()
@@ -279,19 +330,5 @@ class ArchivableFilesFinderTest extends \PHPUnit_Framework_TestCase
         $actualFiles = $this->getArchivableFiles();
 
         $this->assertEquals($expectedFiles, $actualFiles);
-    }
-
-    /**
-     * Check whether or not the given process is available.
-     *
-     * @param string $process The name of the binary to test.
-     *
-     * @return bool True if the process is available, false otherwise.
-     */
-    protected function isProcessAvailable($process)
-    {
-        $finder = new ExecutableFinder();
-
-        return (bool) $finder->find($process);
     }
 }

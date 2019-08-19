@@ -14,14 +14,20 @@ namespace Composer\Test\Package;
 
 use Composer\Package\Locker;
 use Composer\IO\NullIO;
+use PHPUnit\Framework\TestCase;
 
-class LockerTest extends \PHPUnit_Framework_TestCase
+class LockerTest extends TestCase
 {
     public function testIsLocked()
     {
-        $json   = $this->createJsonFileMock();
-        $locker = new Locker(new NullIO, $json, $this->createRepositoryManagerMock(), $this->createInstallationManagerMock(),
-            $this->getJsonContent());
+        $json = $this->createJsonFileMock();
+        $locker = new Locker(
+            new NullIO,
+            $json,
+            $this->createRepositoryManagerMock(),
+            $this->createInstallationManagerMock(),
+            $this->getJsonContent()
+        );
 
         $json
             ->expects($this->any())
@@ -118,7 +124,13 @@ class LockerTest extends \PHPUnit_Framework_TestCase
             ->method('getVersion')
             ->will($this->returnValue('0.1.10.0'));
 
-        $hash = md5($jsonContent);
+        foreach (array($package1, $package2) as $package) {
+            $package
+                ->expects($this->atLeastOnce())
+                ->method('getTransportOptions')
+                ->will($this->returnValue(array()));
+        }
+
         $contentHash = md5(trim($jsonContent));
 
         $json
@@ -126,9 +138,8 @@ class LockerTest extends \PHPUnit_Framework_TestCase
             ->method('write')
             ->with(array(
                 '_readme' => array('This file locks the dependencies of your project to a known state',
-                                   'Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file',
+                                   'Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies',
                                    'This file is @gener'.'ated automatically', ),
-                'hash' => $hash,
                 'content-hash' => $contentHash,
                 'packages' => array(
                     array('name' => 'pkg1', 'version' => '1.0.0-beta'),
@@ -213,6 +224,23 @@ class LockerTest extends \PHPUnit_Framework_TestCase
             ->expects($this->once())
             ->method('read')
             ->will($this->returnValue(array('hash' => md5($jsonContent . '  '), 'content-hash' => md5($jsonContent))));
+
+        $this->assertTrue($locker->isFresh());
+    }
+
+    public function testIsFreshWithContentHashAndNoHash()
+    {
+        $json = $this->createJsonFileMock();
+        $repo = $this->createRepositoryManagerMock();
+        $inst = $this->createInstallationManagerMock();
+
+        $jsonContent = $this->getJsonContent();
+        $locker = new Locker(new NullIO, $json, $repo, $inst, $jsonContent);
+
+        $json
+            ->expects($this->once())
+            ->method('read')
+            ->will($this->returnValue(array('content-hash' => md5($jsonContent))));
 
         $this->assertTrue($locker->isFresh());
     }
